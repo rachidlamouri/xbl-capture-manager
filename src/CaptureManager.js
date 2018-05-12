@@ -2,44 +2,52 @@ require('dotenv').config()
 const fs = require('fs')
 const https = require('https')
 
-class CaptureManager{
-    constructor(){
-        Object.assign(this, {
-            metaFile: CaptureManager.SAVE_DIR + 'meta.json',
-            meta: {},
-        })
+class DataFile{
+    constructor(filename){
+        this.data = {}
+        this.filename = CaptureManager.SAVE_DIR + filename
         
-        if(!fs.existsSync(this.metaFile)){
-            this.saveMeta()
+        if(!fs.existsSync(this.filename)){
+            this.save()
         }else{
-            let metaString = fs.readFileSync(this.metaFile, 'utf8')
-            this.meta = JSON.parse(metaString)
+            let string = fs.readFileSync(this.filename, 'utf8')
+            this.data = JSON.parse(string)
         }
     }
     
-    saveMeta(){
-        let metaString = JSON.stringify(this.meta)
-        fs.writeFileSync(this.metaFile, metaString)
+    save(){
+        let string = JSON.stringify(this.data)
+        fs.writeFileSync(this.filename, string)
     }
+}
+
+class CaptureManager{
+    constructor(){
+        this.files = {
+            meta: new DataFile('meta.json'),
+        }
+    }
+    
     setGamertag(gamertag){
         if(!gamertag){
             CaptureManager.printError('Missing gamertag arg')
             return
         }
         
+        let meta = this.files.meta
         let path = 'xuid/'+gamertag
         CaptureManager.status('Get xuid')
         CaptureManager.apiGet(path).then((xuid)=>{
             CaptureManager.status('Xuid: '+xuid)
-            this.meta.xuid = xuid
+            meta.data.xuid = xuid
         }).then(()=>{
-            path = 'gamertag/'+this.meta.xuid
+            path = 'gamertag/'+meta.data.xuid
             CaptureManager.status('Get exact gamertag')
             return CaptureManager.apiGet(path)
         }).then((gamertag)=>{
             CaptureManager.status('Gamertag: '+gamertag)
-            this.meta.gamertag = gamertag
-            this.saveMeta()
+            meta.data.gamertag = gamertag
+            meta.save()
             CaptureManager.status('Done')
         })
     }
