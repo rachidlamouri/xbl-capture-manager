@@ -1,0 +1,20 @@
+{
+  "name": "capture-manager",
+  "version": "0.0.0",
+  "description": "For downloading, managing and archiving Xbox One clips and screenshots",
+  "author": "Rachid Lamouri",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/RachiLam/capture-manager.git"
+  },
+  "homepage": "https://github.com/RachiLam/capture-manager#readme",
+  "bugs": {
+    "url": "https://github.com/RachiLam/capture-manager/issues"
+  },
+  "license": "ISC",
+  "scripts": {
+  },
+  "dependencies": {
+    "dotenv": "^5.0.1"
+  }
+}
