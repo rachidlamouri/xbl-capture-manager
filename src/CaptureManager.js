@@ -24,10 +24,36 @@ class DataFile{
 class CaptureManager{
     constructor(){
         this.files = {
+            cache: new DataFile('cache.json'),
             meta: new DataFile('meta.json'),
         }
     }
     
+    cache(){
+        let {cache, meta} = this.files
+        if(!meta.data || !meta.data.xuid){
+            CaptureManager.printError('Missing xuid. Run set_gamertag script first')
+            return
+        }
+        
+        let paths = {
+            screenshots: meta.data.xuid+'/screenshots',
+            clips: meta.data.xuid+'/game-clips',
+        }
+        CaptureManager.apiGet(paths.screenshots, 'Get screenshots').then((screenshots)=>{
+            screenshots = JSON.parse(screenshots)
+            CaptureManager.status('Screenshots: '+screenshots.length)
+            cache.data.screenshots = screenshots
+            
+            return CaptureManager.apiGet(paths.clips, 'Get clips')
+        }).then((clips)=>{
+            clips = JSON.parse(clips)
+            CaptureManager.status('Clips: '+clips.length)
+            cache.data.clips = clips
+            cache.save()
+            CaptureManager.status('Done')
+        })
+    }
     setGamertag(gamertag){
         if(!gamertag){
             CaptureManager.printError('Missing gamertag arg')
@@ -35,15 +61,14 @@ class CaptureManager{
         }
         
         let meta = this.files.meta
+        
         let path = 'xuid/'+gamertag
-        CaptureManager.status('Get xuid')
-        CaptureManager.apiGet(path).then((xuid)=>{
+        CaptureManager.apiGet(path, 'Get xuid').then((xuid)=>{
             CaptureManager.status('Xuid: '+xuid)
             meta.data.xuid = xuid
         }).then(()=>{
             path = 'gamertag/'+meta.data.xuid
-            CaptureManager.status('Get exact gamertag')
-            return CaptureManager.apiGet(path)
+            return CaptureManager.apiGet(path, 'Get exact gamertag')
         }).then((gamertag)=>{
             CaptureManager.status('Gamertag: '+gamertag)
             meta.data.gamertag = gamertag
@@ -52,7 +77,7 @@ class CaptureManager{
         })
     }
     
-    static apiGet(path, onData){
+    static apiGet(path, message){
         if(!process.env.API_KEY){
             CaptureManager.printError('API_KEY not defined in .env')
             return
@@ -66,10 +91,9 @@ class CaptureManager{
             }
         }
         
+        CaptureManager.status(message)
         let promise = new Promise((resolve, reject)=>{
             let request = https.request(options, (response)=>{
-                CaptureManager.status('Response Code: ' + response.statusCode)
-                
                 if(response.statusCode != 200){
                     CaptureManager.printError('https response failed with status: '+response.statusCode)
                     reject()
