@@ -40,23 +40,54 @@ class CaptureManager{
         
         Util.status('Gamertag: '+meta.data.gamertag)
         
+        cache.data.clips = []
+        cache.data.screenshots = []
+        
         let paths = {
             screenshots: meta.data.xuid+'/screenshots',
             clips: meta.data.xuid+'/game-clips',
         }
-        CaptureManager.apiGet(paths.screenshots, 'Getting screenshots...').then((screenshots)=>{
-            screenshots = JSON.parse(screenshots)
-            Util.status('Screenshots: '+screenshots.length)
-            cache.data.screenshots = screenshots
-            
-            return CaptureManager.apiGet(paths.clips, 'Getting clips...')
-        }).then((clips)=>{
-            clips = JSON.parse(clips)
-            Util.status('Clips: '+clips.length)
-            cache.data.clips = clips
-            cache.save()
-            Util.status('Done')
-        })
+        
+        let getClips = (continuationToken)=>{
+            let path = continuationToken? paths.clips+'?continuationToken='+continuationToken: paths.clips
+            let message = continuationToken? '    Getting more clips...': 'Getting clips...'
+            return CaptureManager.apiGet(path, message).then((response)=>{
+                let clips = response.data
+                let {continuationToken} = response
+                clips = JSON.parse(clips)
+                Util.status('    Clips: '+clips.length)
+                cache.data.clips = cache.data.clips.concat(clips)
+                
+                if(continuationToken){
+                    return getClips(continuationToken)
+                }else{
+                    return getScreenshots()
+                }
+            })
+        }
+        
+        let getScreenshots = (continuationToken)=>{
+            let path = continuationToken? paths.screenshots+'?continuationToken='+continuationToken: paths.screenshots
+            let message = continuationToken? '    Getting more screenshots...': 'Getting screenshots...'
+            return CaptureManager.apiGet(path, message).then((response)=>{
+                let screenshots = response.data
+                let {continuationToken} = response
+                screenshots = JSON.parse(screenshots)
+                Util.status('    Screenshots: '+screenshots.length)
+                cache.data.screenshots = cache.data.screenshots.concat(screenshots)
+                
+                if(continuationToken){
+                    return getScreenshots(continuationToken)
+                }else{
+                    cache.save()
+                    Util.status('Total clips cached: ' + cache.data.clips.length)
+                    Util.status('Total screenshots cached: ' + cache.data.screenshots.length)
+                    Util.status('Done')
+                }
+            })
+        }
+        
+        getClips()
     }
     document(){
         let {cache, meta} = this.files
@@ -68,7 +99,9 @@ class CaptureManager{
             return
         }
         
+        let totalClipCount = 0
         let clipCount = 0
+        let totalScreenshotCount = 0
         let screenshotCount = 0
         
         let clipSql = `
@@ -127,12 +160,14 @@ class CaptureManager{
             }
             
             sqlite.query(clipSql, params, true).then(()=>{
-                Util.status('Clip '+clip.gameClipId+' added')
+                totalClipCount++
+                Util.status('Clip '+clip.gameClipId+' added  - '+totalClipCount)
                 clipCount++
                 documentNext()
             }).catch((error)=>{
+                totalClipCount++
                 if(error.errno == 19){
-                    Util.warning('Clip '+clip.gameClipId+' exists')
+                    Util.warning('Clip '+clip.gameClipId+' exists - '+totalClipCount)
                 }else{
                     Util.error(error, true)
                 }
@@ -174,12 +209,14 @@ class CaptureManager{
             }
             
             sqlite.query(screenshotSql, params, true).then(()=>{
-                Util.status('Screenshot '+screenshot.screenshotId+' added')
+                totalScreenshotCount++
+                Util.status('Screenshot '+screenshot.screenshotId+' added  - '+totalScreenshotCount)
                 screenshotCount++
                 documentNext()
             }).catch((error)=>{
+                totalScreenshotCount++
                 if(error.errno == 19){
-                    Util.warning('Screenshot '+screenshot.screenshotId+' exists')
+                    Util.warning('Screenshot '+screenshot.screenshotId+' exists - '+totalScreenshotCount)
                 }else{
                     Util.error(error, true)
                 }
@@ -194,8 +231,8 @@ class CaptureManager{
                 documentScreenshot(screenshots.shift())
             }else{
                 Util.status('----------------')
-                Util.status('Clips documented: '+clipCount)
-                Util.status('Screenshots documented: '+screenshotCount)
+                Util.status(`${clipCount} clips documented out of ${cache.data.clips.length} cached`)
+                Util.status(`${screenshotCount} screenshots documented out of ${cache.data.screenshots.length} cached`)
                 Util.status('Done')
             }
         }
@@ -211,13 +248,15 @@ class CaptureManager{
         let meta = this.files.meta
         
         let path = 'xuid/'+gamertag
-        CaptureManager.apiGet(path, 'Getting xuid...').then((xuid)=>{
+        CaptureManager.apiGet(path, 'Getting xuid...').then((response)=>{
+            let xuid = response.data
             Util.status('Xuid: '+xuid)
             meta.data.xuid = xuid
         }).then(()=>{
             path = 'gamertag/'+meta.data.xuid
             return CaptureManager.apiGet(path, 'Getting exact gamertag...')
-        }).then((gamertag)=>{
+        }).then((response)=>{
+            let gamertag = response.data
             Util.status('Gamertag: '+gamertag)
             meta.data.gamertag = gamertag
             meta.save()
@@ -241,6 +280,8 @@ class CaptureManager{
                     Util.error('https response failed with status: '+response.statusCode)
                 }
                 
+                let continuationToken = response.headers['x-continuationtoken']
+                
                 let data = ''
                 response.on('data', (chunk)=>{
                     data += chunk
@@ -248,7 +289,10 @@ class CaptureManager{
                 
                 response.on('end', ()=>{
                     if(response.statusCode == 200){
-                        resolve(data)
+                        resolve({
+                            data: data,
+                            continuationToken: continuationToken,
+                        })
                     }else{
                         Util.error(data, true)
                     }
