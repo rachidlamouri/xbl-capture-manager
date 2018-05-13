@@ -1,11 +1,11 @@
-require('dotenv').config()
+const Util = require('./Util')
 const fs = require('fs')
 const https = require('https')
 
 class DataFile{
     constructor(filename){
         this.data = {}
-        this.filename = CaptureManager.SAVE_DIR + filename
+        this.filename = process.env.SAVE_DIR + filename
         
         if(!fs.existsSync(this.filename)){
             this.save()
@@ -32,7 +32,7 @@ class CaptureManager{
     cache(){
         let {cache, meta} = this.files
         if(!meta.data || !meta.data.xuid){
-            CaptureManager.printError('Missing xuid. Run set_gamertag script first')
+            Util.error('Missing xuid. Run set_gamertag script first', true)
             return
         }
         
@@ -42,21 +42,21 @@ class CaptureManager{
         }
         CaptureManager.apiGet(paths.screenshots, 'Get screenshots').then((screenshots)=>{
             screenshots = JSON.parse(screenshots)
-            CaptureManager.status('Screenshots: '+screenshots.length)
+            Util.status('Screenshots: '+screenshots.length)
             cache.data.screenshots = screenshots
             
             return CaptureManager.apiGet(paths.clips, 'Get clips')
         }).then((clips)=>{
             clips = JSON.parse(clips)
-            CaptureManager.status('Clips: '+clips.length)
+            Util.status('Clips: '+clips.length)
             cache.data.clips = clips
             cache.save()
-            CaptureManager.status('Done')
+            Util.status('Done')
         })
     }
     setGamertag(gamertag){
         if(!gamertag){
-            CaptureManager.printError('Missing gamertag arg')
+            Util.error('Missing gamertag arg', true)
             return
         }
         
@@ -64,25 +64,20 @@ class CaptureManager{
         
         let path = 'xuid/'+gamertag
         CaptureManager.apiGet(path, 'Get xuid').then((xuid)=>{
-            CaptureManager.status('Xuid: '+xuid)
+            Util.status('Xuid: '+xuid)
             meta.data.xuid = xuid
         }).then(()=>{
             path = 'gamertag/'+meta.data.xuid
             return CaptureManager.apiGet(path, 'Get exact gamertag')
         }).then((gamertag)=>{
-            CaptureManager.status('Gamertag: '+gamertag)
+            Util.status('Gamertag: '+gamertag)
             meta.data.gamertag = gamertag
             meta.save()
-            CaptureManager.status('Done')
+            Util.status('Done')
         })
     }
     
     static apiGet(path, message){
-        if(!process.env.API_KEY){
-            CaptureManager.printError('API_KEY not defined in .env')
-            return
-        }
-        
         let options = {
             hostname: 'xboxapi.com',
             path: '/v2/'+path,
@@ -91,13 +86,11 @@ class CaptureManager{
             }
         }
         
-        CaptureManager.status(message)
+        Util.status(message)
         let promise = new Promise((resolve, reject)=>{
             let request = https.request(options, (response)=>{
                 if(response.statusCode != 200){
-                    CaptureManager.printError('https response failed with status: '+response.statusCode)
-                    reject()
-                    return
+                    Util.error('https response failed with status: '+response.statusCode)
                 }
                 
                 let data = ''
@@ -106,13 +99,16 @@ class CaptureManager{
                 })
                 
                 response.on('end', ()=>{
-                    resolve(data)
+                    if(response.statusCode == 200){
+                        resolve(data)
+                    }else{
+                        Util.error(data, true)
+                    }
                 })
             })
             
             request.on('error', (error)=>{
-                CaptureManager.printError('https request error: '+error)
-                reject()
+                Util.error('https request error: '+error, true)
             })
             
             request.end()
@@ -120,16 +116,6 @@ class CaptureManager{
         
         return promise
     }
-    static status(message){
-        console.log('\x1b[32m%s\x1b[0m', message)
-    }
-    static printError(message){
-        console.log('\x1b[31m%s\x1b[0m', 'Error: '+message)
-        console.log('\x1b[31m%s\x1b[0m', 'Aborting')
-    }
 }
-Object.assign(CaptureManager, {
-    SAVE_DIR: './data/',
-})
 
 module.exports = CaptureManager
