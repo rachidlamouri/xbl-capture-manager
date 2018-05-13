@@ -3,6 +3,7 @@ require('dotenv').config()
 const green = '\x1b[32m'
 const red = '\x1b[31m'
 const reset = '\x1b[0m'
+const yellow = '\x1b[33m'
 
 class Util{
     static checkEnv(){
@@ -21,6 +22,9 @@ class Util{
     }
     static status(message){
         console.log(green+'%s'+reset, message)
+    }
+    static warning(message){
+        console.log(yellow+'%s'+reset, message)
     }
 }
 Object.assign(Util, {

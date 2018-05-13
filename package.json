@@ -14,9 +14,11 @@
   "license": "ISC",
   "scripts": {
     "cache": "node src/cache.js",
+    "document": "node src/document.js",
     "set-gamertag": "node src/set_gamertag.js"
   },
   "dependencies": {
-    "dotenv": "^5.0.1"
+    "dotenv": "^5.0.1",
+    "sqlite3": "^4.0.0"
   }
 }
