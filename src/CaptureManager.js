@@ -1,5 +1,6 @@
 const fs = require('fs')
 const https = require('https')
+const readline = require('readline')
 
 const Util = require('./Util')
 const sqlite = require('./SqLite')
@@ -29,8 +30,66 @@ class CaptureManager{
             cache: new DataFile('cache.json'),
             meta: new DataFile('meta.json'),
         }
+        this.archiveDir = process.env.SAVE_DIR + 'archive/'
+        if(!fs.existsSync(this.archiveDir)){
+            fs.mkdir(this.archiveDir)
+        }
     }
     
+    archive(count){
+        if(count === undefined){
+            Util.error('Missing count argument. Provide the number of captures to archive. Usage: npm run archive <integer count>', true)
+        }
+        count = parseInt(count)
+        if(isNaN(count)){
+            Util.error('Count is not an integer. Usage: npm run archive <integer count>', true)
+        }
+        count = Math.abs(count)
+        
+        let selectSql = `
+            SELECT Id, OriginalUri
+            FROM Clips
+            WHERE IsArchived = 0
+            LIMIT 1
+        `
+        
+        let updateSql = `
+            UPDATE Clips
+            SET IsArchived = 1
+            WHERE Id = $Id
+        `
+        
+        let archivedCount = 0
+        let archiveNext = ()=>{
+            if(archivedCount >= count){
+                Util.status('Done')
+                return
+            }
+            
+            sqlite.query(selectSql, {}).then((result)=>{
+                if(!result.first){
+                    Util.status('No clips to archive')
+                    return new Promise((resolve, reject)=>{reject()})
+                }
+                
+                let {Id, OriginalUri} = result.first
+                Util.status('Downloading '+Id+' '+(archivedCount + 1))
+                return this.download(Id, OriginalUri).then(()=>{
+                    return new Promise((resolve, reject)=>{resolve(Id)})
+                })
+            }).then((id)=>{
+                return sqlite.query(updateSql, {
+                    $Id: id,
+                })
+            }).then(()=>{
+                archivedCount++
+                archiveNext()
+            }).catch((error)=>{
+                Util.status('Done')
+            })
+        }
+        archiveNext()
+    }
     cache(){
         let {cache, meta} = this.files
         if(!meta.data || !meta.data.xuid){
@@ -51,7 +110,7 @@ class CaptureManager{
         let getClips = (continuationToken)=>{
             let path = continuationToken? paths.clips+'?continuationToken='+continuationToken: paths.clips
             let message = continuationToken? '    Getting more clips...': 'Getting clips...'
-            return CaptureManager.apiGet(path, message).then((response)=>{
+            return this.apiGet(path, message).then((response)=>{
                 let clips = response.data
                 let {continuationToken} = response
                 clips = JSON.parse(clips)
@@ -69,7 +128,7 @@ class CaptureManager{
         let getScreenshots = (continuationToken)=>{
             let path = continuationToken? paths.screenshots+'?continuationToken='+continuationToken: paths.screenshots
             let message = continuationToken? '    Getting more screenshots...': 'Getting screenshots...'
-            return CaptureManager.apiGet(path, message).then((response)=>{
+            return this.apiGet(path, message).then((response)=>{
                 let screenshots = response.data
                 let {continuationToken} = response
                 screenshots = JSON.parse(screenshots)
@@ -248,13 +307,13 @@ class CaptureManager{
         let meta = this.files.meta
         
         let path = 'xuid/'+gamertag
-        CaptureManager.apiGet(path, 'Getting xuid...').then((response)=>{
+        this.apiGet(path, 'Getting xuid...').then((response)=>{
             let xuid = response.data
             Util.status('Xuid: '+xuid)
             meta.data.xuid = xuid
         }).then(()=>{
             path = 'gamertag/'+meta.data.xuid
-            return CaptureManager.apiGet(path, 'Getting exact gamertag...')
+            return this.apiGet(path, 'Getting exact gamertag...')
         }).then((response)=>{
             let gamertag = response.data
             Util.status('Gamertag: '+gamertag)
@@ -264,7 +323,7 @@ class CaptureManager{
         })
     }
     
-    static apiGet(path, message){
+    apiGet(path, message){
         let options = {
             hostname: 'xboxapi.com',
             path: '/v2/'+encodeURI(path),
@@ -307,6 +366,47 @@ class CaptureManager{
         })
         
         return promise
+    }
+    download(id, uri){
+        return new Promise((resolve, reject)=>{
+            let filename = this.archiveDir+id+'.mp4'
+            let file = fs.createWriteStream(filename)
+            let request = https.request(uri, (response)=>{
+                if(response.statusCode != 200){
+                    Util.error('https response failed with status: '+response.statusCode)
+                }
+                
+                let contentLength = parseInt(response.headers['content-length'])
+                let contentDownloaded = 0
+                process.stdout.write('Progress')
+                
+                response.on('data', (chunk)=>{
+                    contentDownloaded += chunk.length
+                    readline.clearLine(process.stdout, 0)
+                    readline.cursorTo(process.stdout, 0)
+                    let progress = contentDownloaded/contentLength
+                    progress = (progress*100).toFixed(2) + '%'
+                    process.stdout.write('Progress: '+progress)
+                })
+                
+                response.pipe(file)
+                
+                response.on('end', ()=>{
+                    if(response.statusCode == 200){
+                        console.log('') // writes new line
+                        resolve()
+                    }else{
+                        Util.error('Failed to download capture - '+id, true)
+                    }
+                })
+            })
+            
+            request.on('error', (error)=>{
+                Util.error('https request error: '+error, true)
+            })
+            
+            request.end()
+        })
     }
 }
 

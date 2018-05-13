@@ -2,6 +2,15 @@ const fs = require('fs')
 const sqlite3 = require('sqlite3')
 const Util = require('./Util')
 
+class QueryResult{
+    constructor(rows){
+        Object.assign(this, {
+            first: rows.length > 0? rows[0]: null,
+            rows: rows,
+        })
+    }
+}
+
 class SqLite{
     query(sql, params, supressLog){
         if(!SqLite.ready){
@@ -56,7 +65,7 @@ class SqLite{
                 if(error){
                     handleError(error)
                 }else{
-                    resolve(result)
+                    resolve(new QueryResult(result))
                 }
             })
             

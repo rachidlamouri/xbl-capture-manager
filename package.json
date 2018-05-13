@@ -13,6 +13,7 @@
   },
   "license": "ISC",
   "scripts": {
+    "archive": "node src/archive.js",
     "cache": "node src/cache.js",
     "document": "node src/document.js",
     "set-gamertag": "node src/set_gamertag.js"
