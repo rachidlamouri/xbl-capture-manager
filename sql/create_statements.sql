@@ -21,6 +21,9 @@ CREATE TABLE IF NOT EXISTS `Clips` (
 	`SystemProps`	TEXT,
 	`ContentAttributes`	TEXT,
 	`OriginalUri`	TEXT,
+	`UriExpiryDate`	TEXT,
+	`LastDocumented`	TEXT,
+	`LastArchived`	TEXT,
 	`IsArchived`	INTEGER NOT NULL,
 	PRIMARY KEY(`Id`)
 );
@@ -49,6 +52,9 @@ CREATE TABLE IF NOT EXISTS `Screenshots` (
 	`SystemProps`	TEXT,
 	`ContentAttributes`	TEXT,
 	`OriginalUri`	TEXT,
+	`UriExpiryDate`	TEXT,
+	`LastDocumented`	TEXT,
+	`LastArchived`	TEXT,
 	`IsArchived`	INTEGER NOT NULL,
 	PRIMARY KEY(`Id`)
 );

@@ -32,7 +32,7 @@ class CaptureManager{
         }
         this.archiveDir = process.env.SAVE_DIR + 'archive/'
         if(!fs.existsSync(this.archiveDir)){
-            fs.mkdir(this.archiveDir)
+            fs.mkdirSync(this.archiveDir)
         }
     }
     
@@ -158,29 +158,55 @@ class CaptureManager{
             return
         }
         
-        let totalClipCount = 0
-        let clipCount = 0
-        let totalScreenshotCount = 0
-        let screenshotCount = 0
+        let counts = {
+            clips: {
+                added: 0,
+                total: 0,
+            },
+            screenshots: {
+                added: 0,
+                total: 0,
+            },
+        }
+        
+        let clipExistsSql = `
+            SELECT COUNT(*) AS Count
+            FROM Clips
+            WHERE Id = $Id
+        `
         
         let clipSql = `
-            INSERT INTO Clips
+            INSERT OR REPLACE INTO Clips
             (Id, GameId, GameName, DateTaken, DatePublished, LastModified, XUID, Gamertag,
             ClipName, Duration, Caption, Type, SavedByUser, DeviceType, Locale, AchievementId, GreatestMomentId,
-            SCID, GameData, SystemProps, ContentAttributes, OriginalUri, IsArchived)
+            SCID, GameData, SystemProps, ContentAttributes, OriginalUri, UriExpiryDate,
+            LastDocumented, LastArchived, IsArchived)
             VALUES ($Id, $GameId, $GameName, $DateTaken, $DatePublished, $LastModified, $XUID, $Gamertag,
             $ClipName, $Duration, $Caption, $Type, $SavedByUser, $DeviceType, $Locale, $AchievementId, $GreatestMomentId,
-            $SCID, $GameData, $SystemProps, $ContentAttributes, $OriginalUri, $IsArchived)
+            $SCID, $GameData, $SystemProps, $ContentAttributes, $OriginalUri, $UriExpiryDate,
+            DATETIME('now'),
+            COALESCE((SELECT LastArchived FROM Clips WHERE Id = $Id), NULL),
+            COALESCE((SELECT IsArchived FROM Clips WHERE Id = $Id), 0))
+        `
+        
+        let screenshotExistsSql = `
+            SELECT COUNT(*) AS Count
+            FROM Screenshots
+            WHERE Id = $Id
         `
         
         let screenshotSql = `
-            INSERT INTO Screenshots
+            INSERT OR REPLACE INTO Screenshots
             (Id, GameId, GameName, DateTaken, DatePublished, LastModified, XUID, Gamertag,
             ScreenshotName, ResolutionWidth, ResolutionHeight, Caption, Type, SavedByUser, DeviceType, Locale, AchievementId, GreatestMomentId,
-            SCID, GameData, SystemProps, ContentAttributes, OriginalUri, IsArchived)
+            SCID, GameData, SystemProps, ContentAttributes, OriginalUri, UriExpiryDate,
+            LastDocumented, LastArchived, IsArchived)
             VALUES ($Id, $GameId, $GameName, $DateTaken, $DatePublished, $LastModified, $XUID, $Gamertag,
             $ScreenshotName, $ResolutionWidth, $ResolutionHeight, $Caption, $Type, $SavedByUser, $DeviceType, $Locale, $AchievementId, $GreatestMomentId,
-            $SCID, $GameData, $SystemProps, $ContentAttributes, $OriginalUri, $IsArchived)
+            $SCID, $GameData, $SystemProps, $ContentAttributes, $OriginalUri, $UriExpiryDate,
+            DATETIME('now'),
+            COALESCE((SELECT LastArchived FROM Screenshots WHERE Id = $Id), NULL),
+            COALESCE((SELECT IsArchived FROM Screenshots WHERE Id = $Id), 0))
         `
         
         let clips = cache.data.clips.slice()
@@ -215,22 +241,25 @@ class CaptureManager{
                 $SystemProps: clip.systemProperties,
                 $ContentAttributes: clip.clipContentAttributes,
                 $OriginalUri: clip.gameClipUris[0].uri,
-                $IsArchived: 0,
+                $UriExpiryDate: clip.gameClipUris[0].expiration,
             }
             
-            sqlite.query(clipSql, params, true).then(()=>{
-                totalClipCount++
-                Util.status('Clip '+clip.gameClipId+' added  - '+totalClipCount)
-                clipCount++
+            let clipExists = false
+            sqlite.query(clipExistsSql, {$Id: clip.gameClipId}).then((result)=>{
+                clipExists = result.first.Count > 0
+                return sqlite.query(clipSql, params, true)
+            }).then((result)=>{
+                counts.clips.total++
+                if(clipExists){
+                    Util.warning('Clip '+clip.gameClipId+' updated - '+counts.clips.total)
+                }else{
+                    counts.clips.added++
+                    Util.status('Clip '+clip.gameClipId+' added   - '+counts.clips.total)
+                }
+                
                 documentNext()
             }).catch((error)=>{
-                totalClipCount++
-                if(error.errno == 19){
-                    Util.warning('Clip '+clip.gameClipId+' exists - '+totalClipCount)
-                }else{
-                    Util.error(error, true)
-                }
-                documentNext()
+                Util.error(error, true)
             })
         }
         
@@ -264,22 +293,25 @@ class CaptureManager{
                 $SystemProps: screenshot.systemProperties,
                 $ContentAttributes: screenshot.screenshotContentAttributes,
                 $OriginalUri: screenshot.screenshotUris[0].uri,
-                $IsArchived: 0,
+                $UriExpiryDate: screenshot.screenshotUris[0].expiration,
             }
             
-            sqlite.query(screenshotSql, params, true).then(()=>{
-                totalScreenshotCount++
-                Util.status('Screenshot '+screenshot.screenshotId+' added  - '+totalScreenshotCount)
-                screenshotCount++
+            let screenshotExists = false
+            sqlite.query(screenshotExistsSql, {$Id: screenshot.screenshotId}).then((result)=>{
+                screenshotExists = result.first.Count > 0
+                return sqlite.query(screenshotSql, params, true)
+            }).then((result)=>{
+                counts.screenshots.total++
+                if(screenshotExists){
+                    Util.warning('Screenshot '+screenshot.screenshotId+' updated - '+counts.screenshots.total)
+                }else{
+                    counts.screenshots.added++
+                    Util.status('Screenshot '+screenshot.screenshotId+' added   - '+counts.screenshots.total)
+                }
+                
                 documentNext()
             }).catch((error)=>{
-                totalScreenshotCount++
-                if(error.errno == 19){
-                    Util.warning('Screenshot '+screenshot.screenshotId+' exists - '+totalScreenshotCount)
-                }else{
-                    Util.error(error, true)
-                }
-                documentNext()
+                Util.error(error, true)
             })
         }
         
@@ -290,8 +322,14 @@ class CaptureManager{
                 documentScreenshot(screenshots.shift())
             }else{
                 Util.status('----------------')
-                Util.status(`${clipCount} clips documented out of ${cache.data.clips.length} cached`)
-                Util.status(`${screenshotCount} screenshots documented out of ${cache.data.screenshots.length} cached`)
+                Util.status(`Clips: ${counts.clips.total} documented`)
+                Util.status(`    ${counts.clips.added} new`)
+                Util.status(`    ${counts.clips.total - counts.clips.added} updated`)
+                Util.status('----------------')
+                Util.status(`Screenshots: ${counts.screenshots.total} documented`)
+                Util.status(`    ${counts.screenshots.added} new`)
+                Util.status(`    ${counts.screenshots.total - counts.screenshots.added} updated`)
+                Util.status('----------------')
                 Util.status('Done')
             }
         }
