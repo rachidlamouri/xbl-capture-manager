@@ -75,7 +75,7 @@ class SqLite{
 }
 Object.assign(SqLite, {
     CREATE_STATEMENTS_FILE: 'sql/create_statements.sql',
-    DB_FILE: process.env.SAVE_DIR + 'captures.sqlite',
+    DB_FILE: process.env.SAVE_DIR + 'captures.sqlite3',
     ready: false,
 })
 

@@ -3,5 +3,6 @@ let manager = new CaptureManager()
 
 process.argv.splice(0,2)
 const count = process.argv.shift()
+const type = process.argv.shift()
 
-manager.archive(count)
+manager.archive(count, type)

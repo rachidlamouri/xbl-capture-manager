@@ -1,6 +1,9 @@
 const fs = require('fs')
 const https = require('https')
 const readline = require('readline')
+const dateformat = require('dateformat')
+const mkdirp = require('mkdirp')
+const JSZip = require('jszip')
 
 const Util = require('./Util')
 const sqlite = require('./SqLite')
@@ -31,12 +34,24 @@ class CaptureManager{
             meta: new DataFile('meta.json'),
         }
         this.archiveDir = process.env.SAVE_DIR + 'archive/'
+        this.tmpDir = process.env.SAVE_DIR + 'tmp/'
+        
+        if(!fs.existsSync(this.tmpDir)){
+            fs.mkdirSync(this.tmpDir)
+        }
+        
         if(!fs.existsSync(this.archiveDir)){
             fs.mkdirSync(this.archiveDir)
         }
     }
     
-    archive(count){
+    archive(count, type){
+        let {meta} = this.files
+        if(!meta.data || !meta.data.xuid || !meta.data.gamertag){
+            Util.error('Missing gamertag info. Run set-gamertag script first', true)
+            return
+        }
+        
         if(count === undefined){
             Util.error('Missing count argument. Provide the number of captures to archive. Usage: npm run archive <integer count>', true)
         }
@@ -46,18 +61,77 @@ class CaptureManager{
         }
         count = Math.abs(count)
         
+        Util.status(meta.data.gamertag)
+        
         let selectSql = `
-            SELECT Id, OriginalUri
-            FROM Clips
+            SELECT * FROM(
+                SELECT
+                    Id,
+                    1 AS IsClip,
+                    XUID,
+                    Gamertag,
+                    OriginalUri,
+                    DateTaken,
+                    FileSize,
+                    DATETIME('now') > UriExpiryDate AS Expired,
+                    IsArchived
+                FROM Clips
+                UNION ALL
+                SELECT
+                    Id,
+                    0 AS IsClip,
+                    XUID,
+                    Gamertag,
+                    OriginalUri,
+                    DateTaken,
+                    FileSize,
+                    DATETIME('now') > UriExpiryDate AS Expired,
+                    IsArchived
+                FROM Screenshots
+            )
             WHERE IsArchived = 0
+                AND XUID = $XUID
+                AND(
+                    $_AllCaptures = 1
+                    OR(
+                        IsClip = 1
+                        AND $_ClipsOnly = 1
+                    )
+                    OR(
+                        IsClip = 0
+                        AND $_ScreenshotsOnly = 1
+                    )
+                )
+            ORDER BY DateTaken DESC
             LIMIT 1
         `
         
-        let updateSql = `
+        let updateClipSql = `
             UPDATE Clips
-            SET IsArchived = 1
+            SET IsArchived = 1,
+                LastArchived = DATETIME('now')
             WHERE Id = $Id
         `
+        
+        let updateScreenshotSql = `
+            UPDATE Screenshots
+            SET IsArchived = 1,
+                LastArchived = DATETIME('now')
+            WHERE Id = $Id
+        `
+        
+        let clipsOnly = type === 'clips'
+        let screenshotsOnly = type === 'screenshots'
+        let allCaptures = !clipsOnly && !screenshotsOnly
+        
+        let selectParams = {
+            $XUID: meta.data.xuid,
+            $_AllCaptures: allCaptures? 1: 0,
+            $_ClipsOnly: clipsOnly? 1: 0,
+            $_ScreenshotsOnly: screenshotsOnly? 1: 0,
+        }
+        
+        let nextCapture = {}
         
         let archivedCount = 0
         let archiveNext = ()=>{
@@ -66,26 +140,103 @@ class CaptureManager{
                 return
             }
             
-            sqlite.query(selectSql, {}).then((result)=>{
+            sqlite.query(selectSql, selectParams).then((result)=>{
                 if(!result.first){
                     Util.status('No clips to archive')
                     return new Promise((resolve, reject)=>{reject()})
                 }
                 
-                let {Id, OriginalUri} = result.first
-                Util.status('Downloading '+Id+' '+(archivedCount + 1))
-                return this.download(Id, OriginalUri).then(()=>{
-                    return new Promise((resolve, reject)=>{resolve(Id)})
-                })
-            }).then((id)=>{
-                return sqlite.query(updateSql, {
-                    $Id: id,
+                nextCapture = result.first
+                let {Id, OriginalUri, IsClip, FileSize, Expired} = nextCapture
+                if(Expired === 1){
+                    Util.error(`URI for ${Id} has expired. Run the cache script, then the document script, then retry the archive script`, true)
+                }
+                
+                let type = IsClip === 1? 'Clip': 'Screenshot'
+                Util.status('Downloading '+type+' '+Id+' '+(archivedCount + 1))
+                return this.download(Id, OriginalUri, FileSize, IsClip === 1)
+            }).then((data)=>{
+                let {contentLength, filename, filepath} = data
+                let {Id, Gamertag, IsClip, FileSize, DateTaken} = nextCapture
+                let date = new Date(DateTaken)
+                let year = dateformat(date, 'yyyy')
+                let month = dateformat(date, 'mm')
+                let type = IsClip === 1? 'clips': 'screenshots'
+                let archiveName = Gamertag+'-'+type+'-'+year+'-'+month+'.zip'
+                let archiveDir = this.archiveDir+Gamertag+'/'+type+'/'+year+'/'
+                let archiveFile = archiveDir+archiveName
+                
+                if(!fs.existsSync(archiveDir)){
+                    mkdirp.sync(archiveDir)
+                }
+                
+                return new Promise((resolve, reject)=>{
+                    if(fs.existsSync(archiveFile)){
+                        Util.status('    Archiving in '+archiveName)
+                        let archiveBuffer = fs.readFileSync(archiveFile)
+                        JSZip.loadAsync(archiveBuffer).then((zip)=>{
+                            resolve(zip)
+                        })
+                    }else{
+                        Util.status('    Creating archive '+archiveName)
+                        resolve(new JSZip())
+                    }
+                }).then((zip)=>{
+                    return new Promise((resolve, reject)=>{
+                        let tmpFileBuffer = fs.readFileSync(filepath)
+                        if(tmpFileBuffer.length != contentLength){
+                            Util.error('File did not download correctly')
+                            Util.error(`${tmpFileBuffer.length} downloaded vs`)
+                            Util.error(`${contentLength} expected`, true)
+                        }
+                        
+                        zip.file(filename, tmpFileBuffer)
+                        zip.file(filename).async('arrayBuffer').then((destBuffer)=>{
+                            if(destBuffer.byteLength != contentLength){
+                                Util.error('File was not added to archive correctly')
+                                Util.error(`${destBuffer.byteLength} transfered vs`)
+                                Util.error(`${contentLength} expected`, true)
+                            }
+                            
+                            let output = fs.createWriteStream(archiveFile)
+                            zip.generateNodeStream({
+                                type: 'nodebuffer',
+                                compression: 'DEFLATE',
+                                compressionOptions: {
+                                    level: 3,
+                                },
+                                streamFile: true,
+                            })
+                            .pipe(output)
+                            .on('finish', ()=>{
+                                fs.unlinkSync(filepath)
+                                resolve()
+                            })
+                        })
+                    })
                 })
             }).then(()=>{
+                let {Id, IsClip} = nextCapture
+                if(IsClip === 1){
+                    return sqlite.query(updateClipSql, {
+                        $Id: Id,
+                    })
+                }else{
+                    return sqlite.query(updateScreenshotSql, {
+                        $Id: Id,
+                    })
+                }
+            }).then((result)=>{
+                Util.status('    Done')
+                console.log('--------------------------------------------------')
                 archivedCount++
                 archiveNext()
             }).catch((error)=>{
-                Util.status('Done')
+                if(error){
+                    Util.error(error, true)
+                }else{
+                    Util.status('Done')
+                }
             })
         }
         archiveNext()
@@ -179,11 +330,11 @@ class CaptureManager{
             INSERT OR REPLACE INTO Clips
             (Id, GameId, GameName, DateTaken, DatePublished, LastModified, XUID, Gamertag,
             ClipName, Duration, Caption, Type, SavedByUser, DeviceType, Locale, AchievementId, GreatestMomentId,
-            SCID, GameData, SystemProps, ContentAttributes, OriginalUri, UriExpiryDate,
+            SCID, GameData, SystemProps, ContentAttributes, OriginalUri, FileSize, UriExpiryDate,
             LastDocumented, LastArchived, IsArchived)
             VALUES ($Id, $GameId, $GameName, $DateTaken, $DatePublished, $LastModified, $XUID, $Gamertag,
             $ClipName, $Duration, $Caption, $Type, $SavedByUser, $DeviceType, $Locale, $AchievementId, $GreatestMomentId,
-            $SCID, $GameData, $SystemProps, $ContentAttributes, $OriginalUri, $UriExpiryDate,
+            $SCID, $GameData, $SystemProps, $ContentAttributes, $OriginalUri, $FileSize, $UriExpiryDate,
             DATETIME('now'),
             COALESCE((SELECT LastArchived FROM Clips WHERE Id = $Id), NULL),
             COALESCE((SELECT IsArchived FROM Clips WHERE Id = $Id), 0))
@@ -199,11 +350,11 @@ class CaptureManager{
             INSERT OR REPLACE INTO Screenshots
             (Id, GameId, GameName, DateTaken, DatePublished, LastModified, XUID, Gamertag,
             ScreenshotName, ResolutionWidth, ResolutionHeight, Caption, Type, SavedByUser, DeviceType, Locale, AchievementId, GreatestMomentId,
-            SCID, GameData, SystemProps, ContentAttributes, OriginalUri, UriExpiryDate,
+            SCID, GameData, SystemProps, ContentAttributes, OriginalUri, FileSize, UriExpiryDate,
             LastDocumented, LastArchived, IsArchived)
             VALUES ($Id, $GameId, $GameName, $DateTaken, $DatePublished, $LastModified, $XUID, $Gamertag,
             $ScreenshotName, $ResolutionWidth, $ResolutionHeight, $Caption, $Type, $SavedByUser, $DeviceType, $Locale, $AchievementId, $GreatestMomentId,
-            $SCID, $GameData, $SystemProps, $ContentAttributes, $OriginalUri, $UriExpiryDate,
+            $SCID, $GameData, $SystemProps, $ContentAttributes, $OriginalUri, $FileSize, $UriExpiryDate,
             DATETIME('now'),
             COALESCE((SELECT LastArchived FROM Screenshots WHERE Id = $Id), NULL),
             COALESCE((SELECT IsArchived FROM Screenshots WHERE Id = $Id), 0))
@@ -241,6 +392,7 @@ class CaptureManager{
                 $SystemProps: clip.systemProperties,
                 $ContentAttributes: clip.clipContentAttributes,
                 $OriginalUri: clip.gameClipUris[0].uri,
+                $FileSize: clip.gameClipUris[0].fileSize,
                 $UriExpiryDate: clip.gameClipUris[0].expiration,
             }
             
@@ -293,6 +445,7 @@ class CaptureManager{
                 $SystemProps: screenshot.systemProperties,
                 $ContentAttributes: screenshot.screenshotContentAttributes,
                 $OriginalUri: screenshot.screenshotUris[0].uri,
+                $FileSize: screenshot.screenshotUris[0].fileSize,
                 $UriExpiryDate: screenshot.screenshotUris[0].expiration,
             }
             
@@ -405,10 +558,12 @@ class CaptureManager{
         
         return promise
     }
-    download(id, uri){
+    download(id, uri, expectedSize, isClip){
         return new Promise((resolve, reject)=>{
-            let filename = this.archiveDir+id+'.mp4'
-            let file = fs.createWriteStream(filename)
+            let extension = isClip? '.mp4': '.png'
+            let filename = id+extension
+            let filepath = this.tmpDir+filename
+            let file = fs.createWriteStream(filepath)
             let request = https.request(uri, (response)=>{
                 if(response.statusCode != 200){
                     Util.error('https response failed with status: '+response.statusCode)
@@ -416,7 +571,12 @@ class CaptureManager{
                 
                 let contentLength = parseInt(response.headers['content-length'])
                 let contentDownloaded = 0
-                process.stdout.write('Progress')
+                if(contentLength != expectedSize){
+                    Util.warning(`    Warning: Download size does not match expected size`)
+                    Util.warning(`        ${contentLength} downloading vs`)
+                    Util.warning(`        ${expectedSize} expected`)
+                }
+                process.stdout.write('    \x1b[32mProgress\x1b[0m')
                 
                 response.on('data', (chunk)=>{
                     contentDownloaded += chunk.length
@@ -424,7 +584,7 @@ class CaptureManager{
                     readline.cursorTo(process.stdout, 0)
                     let progress = contentDownloaded/contentLength
                     progress = (progress*100).toFixed(2) + '%'
-                    process.stdout.write('Progress: '+progress)
+                    process.stdout.write('    \x1b[32mProgress: '+progress+'\x1b[0m')
                 })
                 
                 response.pipe(file)
@@ -432,7 +592,11 @@ class CaptureManager{
                 response.on('end', ()=>{
                     if(response.statusCode == 200){
                         console.log('') // writes new line
-                        resolve()
+                        resolve({
+                            contentLength: contentLength,
+                            filename: filename,
+                            filepath: filepath,
+                        })
                     }else{
                         Util.error('Failed to download capture - '+id, true)
                     }
