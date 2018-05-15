@@ -60,3 +60,17 @@ CREATE TABLE IF NOT EXISTS `Screenshots` (
 	`IsArchived`	INTEGER NOT NULL,
 	PRIMARY KEY(`Id`)
 );
+
+CREATE TABLE IF NOT EXISTS `Thumbnails` (
+	`CaptureId`	TEXT NOT NULL,
+	`CaptureIsClip`	INTEGER NOT NULL,
+	`Type`	TEXT NOT NULL,
+	`XUID`	INTEGER,
+	`Gamertag`	TEXT,
+	`OriginalUri`	TEXT,
+	`DateTaken`	TEXT,
+	`LastDocumented`	TEXT,
+	`LastArchived`	TEXT,
+	`IsArchived`	INTEGER,
+	PRIMARY KEY(`CaptureId`,`CaptureIsClip`,`Type`)
+);

@@ -68,6 +68,8 @@ class CaptureManager{
                 SELECT
                     Id,
                     1 AS IsClip,
+                    0 AS IsThumbnail,
+                    NULL AS ThumbnailType,
                     XUID,
                     Gamertag,
                     OriginalUri,
@@ -80,6 +82,8 @@ class CaptureManager{
                 SELECT
                     Id,
                     0 AS IsClip,
+                    0 AS IsThumbnail,
+                    NULL AS ThumbnailType,
                     XUID,
                     Gamertag,
                     OriginalUri,
@@ -88,6 +92,20 @@ class CaptureManager{
                     DATETIME('now') > UriExpiryDate AS Expired,
                     IsArchived
                 FROM Screenshots
+                UNION ALL
+                SELECT
+                    CaptureId AS Id,
+                    CaptureIsClip AS IsClip,
+                    1 AS IsThumbnail,
+                    Type AS ThumbnailType,
+                    XUID,
+                    Gamertag,
+                    OriginalUri,
+                    DateTaken,
+                    0 AS FileSize,
+                    0 AS Expired,
+                    IsArchived
+                FROM Thumbnails
             )
             WHERE IsArchived = 0
                 AND XUID = $XUID
@@ -102,7 +120,7 @@ class CaptureManager{
                         AND $_ScreenshotsOnly = 1
                     )
                 )
-            ORDER BY DateTaken DESC
+            ORDER BY DateTaken DESC, Id, IsThumbnail DESC
             LIMIT 1
         `
         
@@ -118,6 +136,15 @@ class CaptureManager{
             SET IsArchived = 1,
                 LastArchived = DATETIME('now')
             WHERE Id = $Id
+        `
+        
+        let updateThumbnailSql = `
+            UPDATE Thumbnails
+            SET IsArchived = 1,
+                LastArchived = DATETIME('now')
+            WHERE CaptureId = $CaptureId
+                AND CaptureIsClip = $CaptureIsClip
+                AND Type = $Type
         `
         
         let clipsOnly = type === 'clips'
@@ -147,21 +174,27 @@ class CaptureManager{
                 }
                 
                 nextCapture = result.first
-                let {Id, OriginalUri, IsClip, FileSize, Expired} = nextCapture
+                let {Id, OriginalUri, IsClip, IsThumbnail, FileSize, Expired} = nextCapture
                 if(Expired === 1){
                     Util.error(`URI for ${Id} has expired. Run the cache script, then the document script, then retry the archive script`, true)
                 }
                 
-                let type = IsClip === 1? 'Clip': 'Screenshot'
+                let type = IsThumbnail === 1?
+                    'Thumbnail ':
+                    IsClip === 1? 'Clip      ': 'Screenshot'
                 Util.status('Downloading '+type+' '+Id+' '+(archivedCount + 1))
-                return this.download(Id, OriginalUri, FileSize, IsClip === 1)
+                
+                let isClip = IsThumbnail !== 1 && IsClip === 1
+                return this.download(Id, OriginalUri, FileSize, isClip)
             }).then((data)=>{
                 let {contentLength, filename, filepath} = data
-                let {Id, Gamertag, IsClip, FileSize, DateTaken} = nextCapture
+                let {Id, Gamertag, IsClip, IsThumbnail, ThumbnailType, FileSize, DateTaken} = nextCapture
                 let date = new Date(DateTaken)
                 let year = dateformat(date, 'yyyy')
                 let month = dateformat(date, 'mm')
-                let type = IsClip === 1? 'clips': 'screenshots'
+                let type = IsThumbnail === 1?
+                    'thumbnails-'+ThumbnailType.toLowerCase():
+                    IsClip === 1? 'clips': 'screenshots'
                 let archiveName = Gamertag+'-'+type+'-'+year+'-'+month+'.zip'
                 let archiveDir = this.archiveDir+Gamertag+'/'+type+'/'+year+'/'
                 let archiveFile = archiveDir+archiveName
@@ -216,8 +249,14 @@ class CaptureManager{
                     })
                 })
             }).then(()=>{
-                let {Id, IsClip} = nextCapture
-                if(IsClip === 1){
+                let {Id, IsClip, IsThumbnail, ThumbnailType} = nextCapture
+                if(IsThumbnail === 1){
+                    return sqlite.query(updateThumbnailSql, {
+                        $CaptureId: Id,
+                        $CaptureIsClip: IsClip,
+                        $Type: ThumbnailType,
+                    })
+                }else if(IsClip === 1){
                     return sqlite.query(updateClipSql, {
                         $Id: Id,
                     })
@@ -227,9 +266,12 @@ class CaptureManager{
                     })
                 }
             }).then((result)=>{
-                Util.status('    Done')
-                console.log('--------------------------------------------------')
-                archivedCount++
+                let {IsThumbnail} = nextCapture
+                if(IsThumbnail === 0){
+                    Util.status('    Done')
+                    console.log('--------------------------------------------------')
+                    archivedCount++
+                }
                 archiveNext()
             }).catch((error)=>{
                 if(error){
@@ -360,8 +402,38 @@ class CaptureManager{
             COALESCE((SELECT IsArchived FROM Screenshots WHERE Id = $Id), 0))
         `
         
+        let thumbnailSql = `
+            INSERT OR REPLACE INTO Thumbnails
+            (CaptureId, CaptureIsClip, Type, XUID, Gamertag, OriginalUri, DateTaken, LastDocumented, LastArchived, IsArchived)
+            VALUES ($CaptureId, $CaptureIsClip, $Type, $XUID, $Gamertag, $OriginalUri, $DateTaken,
+            DATETIME('now'),
+            COALESCE((SELECT LastArchived FROM Thumbnails WHERE CaptureId = $CaptureId AND CaptureIsClip = $CaptureIsClip), NULL),
+            COALESCE((SELECT IsArchived FROM Thumbnails WHERE CaptureId = $CaptureId AND CaptureIsClip = $CaptureIsClip), 0))
+        `
+        
         let clips = cache.data.clips.slice()
         let screenshots = cache.data.screenshots.slice()
+        
+        let documentThumbnails = (captureId, captureIsClip, xuid, gamertag, dateTaken, thumbnails)=>{
+            return new Promise((resolve, reject)=>{
+                if(thumbnails.length == 0){
+                    resolve()
+                }else{
+                    let thumbnail = thumbnails.shift()
+                    sqlite.query(thumbnailSql, {
+                        $CaptureId: captureId,
+                        $CaptureIsClip: captureIsClip,
+                        $Type: thumbnail.thumbnailType,
+                        $XUID: xuid,
+                        $Gamertag: gamertag,
+                        $DateTaken: dateTaken,
+                        $OriginalUri: thumbnail.uri,
+                    }).then(()=>{
+                        resolve(documentThumbnails(captureId, captureIsClip, xuid, gamertag, dateTaken, thumbnails))
+                    })
+                }
+            })
+        }
         
         let documentClip = (clip)=>{
             if(clip.xuid != meta.data.xuid){
@@ -397,10 +469,16 @@ class CaptureManager{
             }
             
             let clipExists = false
-            sqlite.query(clipExistsSql, {$Id: clip.gameClipId}).then((result)=>{
+            let thumbnails = clip.thumbnails.slice()
+            documentThumbnails(clip.gameClipId, 1, clip.xuid, meta.data.gamertag, clip.dateRecorded, thumbnails)
+            .then(()=>{
+                return sqlite.query(clipExistsSql, {$Id: clip.gameClipId})
+            })
+            .then((result)=>{
                 clipExists = result.first.Count > 0
                 return sqlite.query(clipSql, params, true)
-            }).then((result)=>{
+            })
+            .then((result)=>{
                 counts.clips.total++
                 if(clipExists){
                     Util.warning('Clip '+clip.gameClipId+' updated - '+counts.clips.total)
@@ -410,7 +488,8 @@ class CaptureManager{
                 }
                 
                 documentNext()
-            }).catch((error)=>{
+            })
+            .catch((error)=>{
                 Util.error(error, true)
             })
         }
@@ -450,10 +529,16 @@ class CaptureManager{
             }
             
             let screenshotExists = false
-            sqlite.query(screenshotExistsSql, {$Id: screenshot.screenshotId}).then((result)=>{
+            let thumbnails = screenshot.thumbnails.slice()
+            documentThumbnails(screenshot.screenshotId, 0, screenshot.xuid, meta.data.gamertag, screenshot.dateTaken, thumbnails)
+            .then(()=>{
+                return sqlite.query(screenshotExistsSql, {$Id: screenshot.screenshotId})
+            })
+            .then((result)=>{
                 screenshotExists = result.first.Count > 0
                 return sqlite.query(screenshotSql, params, true)
-            }).then((result)=>{
+            })
+            .then((result)=>{
                 counts.screenshots.total++
                 if(screenshotExists){
                     Util.warning('Screenshot '+screenshot.screenshotId+' updated - '+counts.screenshots.total)
@@ -463,7 +548,8 @@ class CaptureManager{
                 }
                 
                 documentNext()
-            }).catch((error)=>{
+            })
+            .catch((error)=>{
                 Util.error(error, true)
             })
         }
@@ -571,7 +657,7 @@ class CaptureManager{
                 
                 let contentLength = parseInt(response.headers['content-length'])
                 let contentDownloaded = 0
-                if(contentLength != expectedSize){
+                if(expectedSize > 0 && contentLength != expectedSize){
                     Util.warning(`    Warning: Download size does not match expected size`)
                     Util.warning(`        ${contentLength} downloading vs`)
                     Util.warning(`        ${expectedSize} expected`)
@@ -587,11 +673,10 @@ class CaptureManager{
                     process.stdout.write('    \x1b[32mProgress: '+progress+'\x1b[0m')
                 })
                 
-                response.pipe(file)
-                
-                response.on('end', ()=>{
+                file.on('close', ()=>{
                     if(response.statusCode == 200){
                         console.log('') // writes new line
+                        
                         resolve({
                             contentLength: contentLength,
                             filename: filename,
@@ -600,6 +685,11 @@ class CaptureManager{
                     }else{
                         Util.error('Failed to download capture - '+id, true)
                     }
+                })
+                
+                response.pipe(file)
+                
+                response.on('end', ()=>{
                 })
             })
             
