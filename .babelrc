@@ -1,0 +1,10 @@
+{
+    "presets": [
+        "env",
+        "react"
+    ],
+    "sourceMaps": true,
+    "ignore": [
+        'node_modules',
+    ],
+}
