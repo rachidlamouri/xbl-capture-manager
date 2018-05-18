@@ -18,6 +18,7 @@
     "cache": "node src/cache.js",
     "document": "node src/document.js",
     "pack": "webpack --watch",
+    "rebuild": "electron-rebuild -f -w sqlite3",
     "set-gamertag": "node src/set_gamertag.js"
   },
   "dependencies": {
@@ -29,6 +30,7 @@
     "react-dom": "^16.3.2",
     "react-redux": "^5.0.7",
     "redux": "^4.0.0",
+    "redux-thunk": "^2.2.0",
     "sqlite3": "^4.0.0"
   },
   "devDependencies": {
@@ -38,7 +40,9 @@
     "babel-preset-react": "^6.24.1",
     "copy-webpack-plugin": "^4.5.1",
     "css-loader": "^0.28.11",
-    "electron": "^2.0.0",
+    "electron": "^2.0.1",
+    "electron-builder": "^20.13.4",
+    "electron-rebuild": "^1.7.3",
     "html-webpack-plugin": "^3.2.0",
     "node-sass": "^4.9.0",
     "sass-loader": "^7.0.1",

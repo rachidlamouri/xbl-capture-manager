@@ -1,6 +1,9 @@
 const {app, BrowserWindow} = require('electron')
 const path = require('path')
 const url = require('url')
+require('dotenv').config({
+    path: path.join(__dirname, 'app.env'),
+})
 
 // Keep a global reference to the window or else it gets garbage collected
 let win

@@ -17,3 +17,12 @@ html, body, #app-root{
     flex-direction: column;
     background-color: $not-white;
 }
+
+.capture-browser{
+    flex-direction: column;
+}
+
+.clip-item img{
+    width: 189px;
+    height: 106px;
+}
