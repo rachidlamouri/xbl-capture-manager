@@ -1,5 +1,12 @@
 $not-white: #EFEFEF;
 
+$padding-sm: 4px;
+$padding-md: 8px;
+
+.rounded{
+    border-radius: 3px;
+}
+
 html, body, div{
     display: flex;
     flex: none;
@@ -16,13 +23,66 @@ html, body, #app-root{
 #app-root{
     flex-direction: column;
     background-color: $not-white;
+    overflow: hidden;
 }
 
-.capture-browser{
+.clip-items{
+    width: 100%;
+    height: 100%;
     flex-direction: column;
+    overflow-y: scroll;
+    padding: $padding-md;
+}
+
+.clip-item{
+    @extend .rounded;
+    background-color: #DDD;
+    border: 1px solid transparent;
+    cursor: pointer;
+    margin-bottom: $padding-sm;
+    padding: $padding-sm;
+}
+
+.clip-item:last-child{
+    margin-bottom: 0px;
+}
+
+.clip-item:hover{
+    background-color: #778899;
 }
 
 .clip-item img{
-    width: 189px;
-    height: 106px;
+    @extend .rounded;
+    width: 126px;
+    height: 71px;
+    margin-right: $padding-md;
+}
+
+.clip-item .info{
+    flex-direction: column;
+}
+
+.capture-preview{
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    align-items: center;
+    justify-content: center;
+    background-color: rgba(0, 0, 0, .8);
+}
+
+.capture-preview.loading{
+    cursor: progress;
+}
+
+.capture-preview video{
+    display: flex;
+    width: 1280px;
+    height: 720px;
+    border: 1px solid black;
+    outline: none;
+}
+
+.hidden{
+    display: none;
 }

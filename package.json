@@ -22,6 +22,7 @@
     "set-gamertag": "node src/set_gamertag.js"
   },
   "dependencies": {
+    "classnames": "^2.2.5",
     "dateformat": "^3.0.3",
     "dotenv": "^5.0.1",
     "jszip": "^3.1.5",

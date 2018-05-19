@@ -1,14 +1,19 @@
 import React, {Component} from 'react'
 import {connect} from 'react-redux'
-import ClipItem from 'browser/components/ClipItem'
 import {getClips} from 'browser/redux/actions'
+
+import CapturePreview from 'browser/components/CapturePreview'
+import ClipItem from 'browser/components/ClipItem'
 
 class CaptureBrowser extends Component{
     render(){
         let {props} = this
         return(
             <div className="capture-browser">
-                {props.clips}
+                <CapturePreview/>
+                <div className="clip-items">
+                    {props.clips}
+                </div>
             </div>
         )
     }
@@ -26,6 +31,8 @@ class CaptureBrowser extends Component{
                     thumbnail={record.thumbnail}
                     clipId={record.Id}
                     dateTaken={record.DateTaken}
+                    game={record.GameName}
+                    gamertag={record.Gamertag}
                 />
             )
         })

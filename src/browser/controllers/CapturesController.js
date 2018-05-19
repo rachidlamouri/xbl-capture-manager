@@ -5,11 +5,43 @@ import dateFormat from 'dateformat'
 import mkdirp from 'mkdirp'
 
 class CapturesController{    
+    static cacheClip(clipId, gamertag, dateTaken){
+        let year = dateFormat(dateTaken, 'yyyy')
+        let month = dateFormat(dateTaken, 'mm')
+        let archiveDir = process.env.ARCHIVE_DIR+gamertag+'/clips/'+year+'/'
+        let archiveName = gamertag+'-clips-'+year+'-'+month+'.zip'
+        let tmpDir = process.env.TMP_DIR+'clips/'
+        let filename = clipId+'.mp4'
+        let tmpFilepath = tmpDir+filename
+        
+        return new Promise((resolve, reject)=>{
+            new Promise((resolve)=>{
+                // delay to allow mapStateToProps to propogate
+                setTimeout(()=>{resolve()}, 100)
+            })
+            .then(()=>{
+                if(!fs.existsSync(tmpFilepath)){
+                    mkdirp.sync(tmpDir)
+                    let archiveBuffer = fs.readFileSync(archiveDir+archiveName)
+                    JSZip.loadAsync(archiveBuffer)
+                    .then((zip)=>{
+                        zip.file(filename).async('uint8array').then((data)=>{
+                            fs.writeFileSync(tmpFilepath, data)
+                            resolve(tmpFilepath)
+                        })
+                    })
+                }else{
+                    resolve(tmpFilepath)
+                }
+            })
+        })
+    }
     static getClips(){
         let sql = `
             SELECT
                 Id,
                 Gamertag,
+                GameName,
                 DateTaken
             FROM Clips
             WHERE IsArchived = 1
@@ -42,23 +74,23 @@ class CapturesController{
         let year = dateFormat(dateTaken, 'yyyy')
         let month = dateFormat(dateTaken, 'mm')
         let archiveDir = process.env.ARCHIVE_DIR+gamertag+'/thumbnails-'+thumbnailType+'/'+year+'/'
-        let archiveName = gamertag+'-thumbnails-'+thumbnailType+'-'+year+'-'+month
+        let archiveName = gamertag+'-thumbnails-'+thumbnailType+'-'+year+'-'+month+'.zip'
         let tmpDir = process.env.TMP_DIR+thumbnailType+'/'
-        let tmpFilepath = tmpDir+clipId+'.png'
+        let filename = clipId+'.png'
+        let tmpFilepath = tmpDir+filename
+        
         
         return new Promise((resolve, reject)=>{
             if(!fs.existsSync(tmpFilepath)){
                 mkdirp.sync(tmpDir)
-                let archiveBuffer = fs.readFileSync(archiveDir+archiveName+'.zip')
-                return(
-                    JSZip.loadAsync(archiveBuffer)
-                    .then((zip)=>{
-                        return zip.file(clipId+'.png').async('uint8array').then((data)=>{
-                            fs.writeFileSync(tmpName, data)
-                            return tmpFilepath
-                        })
+                let archiveBuffer = fs.readFileSync(archiveDir+archiveName)
+                JSZip.loadAsync(archiveBuffer)
+                .then((zip)=>{
+                    zip.file(filename).async('uint8array').then((data)=>{
+                        fs.writeFileSync(tmpFilepath, data)
+                        resolve(tmpFilepath)
                     })
-                )
+                })
             }else{
                 resolve(tmpFilepath)
             }

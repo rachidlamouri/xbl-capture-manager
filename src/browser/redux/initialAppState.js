@@ -5,8 +5,19 @@ export function clipsState(){
     }
 }
 
+export function playbackState(){
+    return {
+        isPlaying: false,
+        isLoading: false,
+        clipId: '',
+        path: '',
+        gamertag: '',
+    }
+}
+
 export function initialAppState(){
     return {
         clips: clipsState(),
+        playback: playbackState(),
     }
 }
