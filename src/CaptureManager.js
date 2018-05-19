@@ -583,11 +583,18 @@ class CaptureManager{
         
         let meta = this.files.meta
         
+        let sql = `
+            INSERT OR REPLACE INTO Profiles
+            (XUID, Gamertag, IsDefault)
+            VALUES ($XUID, $Gamertag,
+            COALESCE((SELECT IsDefault FROM Profiles WHERE XUID = $XUID), 0))
+        `
+        
         let path = 'xuid/'+gamertag
         this.apiGet(path, 'Getting xuid...').then((response)=>{
             let xuid = response.data
             Util.status('Xuid: '+xuid)
-            meta.data.xuid = xuid
+            meta.data.xuid = parseInt(xuid)
         }).then(()=>{
             path = 'gamertag/'+meta.data.xuid
             return this.apiGet(path, 'Getting exact gamertag...')
@@ -596,6 +603,15 @@ class CaptureManager{
             Util.status('Gamertag: '+gamertag)
             meta.data.gamertag = gamertag
             meta.save()
+            
+            let params = {
+                $XUID: meta.data.xuid,
+                $Gamertag: meta.data.gamertag,
+            }
+            
+            Util.status('Updating database')
+            return sqlite.query(sql, params)
+        }).then(()=>{
             Util.status('Done')
         })
     }

@@ -36,7 +36,11 @@ class CapturesController{
             })
         })
     }
-    static getClips(){
+    static getClips(xuid){
+        if(xuid == null){
+            return Promise.resolve([])
+        }
+        
         let sql = `
             SELECT
                 Id,
@@ -45,12 +49,17 @@ class CapturesController{
                 DateTaken
             FROM Clips
             WHERE IsArchived = 1
+                AND XUID = $XUID
             ORDER BY DateTaken DESC
             LIMIT 10
         `
         
+        let params = {
+            $XUID: xuid,
+        }
+        
         return(
-            sqlite.query(sql, {})
+            sqlite.query(sql, params)
             .then((result)=>{
                 let promises = []
                 result.records.forEach((record)=>{
@@ -67,6 +76,42 @@ class CapturesController{
                 return Promise.all(promises).then(()=>{
                     return result.records
                 })
+            })
+        )
+    }
+    static getDefaultProfile(){
+        let sql = `
+            SELECT
+                XUID,
+                Gamertag
+            FROM Profiles
+            ORDER BY
+                IsDefault DESC,
+                Gamertag
+            LIMIT 1
+        `
+        
+        return(
+            sqlite.query(sql, {})
+            .then((result)=>{
+                let record = result.first? result.first: []
+                return Promise.resolve(result.first)
+            })
+        )
+    }
+    static getProfiles(){
+        let sql = `
+            SELECT
+                XUID,
+                Gamertag
+            FROM Profiles
+            ORDER BY Gamertag
+        `
+        
+        return(
+            sqlite.query(sql, {})
+            .then((result)=>{
+                return Promise.resolve(result.records)
             })
         )
     }

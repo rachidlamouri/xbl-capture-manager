@@ -1,0 +1,25 @@
+@import '~common/styles/vars';
+
+/* Base */
+html, body, div{
+    display: flex;
+    flex: none;
+    box-sizing: border-box;
+}
+
+html, body, #app-root{
+    width: 100%;
+    height: 100%;
+    padding: 0px;
+    margin: 0px;
+}
+
+#app-root{
+    flex-direction: column;
+    background-color: $not-white;
+    overflow: hidden;
+}
+
+.rounded{
+    border-radius: 3px;
+}

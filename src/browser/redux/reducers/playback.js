@@ -1,8 +1,8 @@
-import {playbackState} from './initialAppState'
-import {actionIds} from './actions'
+import {playbackState} from 'browser/redux/initialAppState'
+import actionIds from 'browser/redux/actions/actionIds'
 const {CACHE_CLIP, SHOW_CLIP, CLOSE_PLAYBACK} = actionIds
 
-export default function clips(state = playbackState(), action){
+export default function(state = playbackState(), action){
     switch(action.type){
         case CACHE_CLIP:
             return Object.assign({}, state, {

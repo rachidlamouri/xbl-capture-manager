@@ -1,6 +1,6 @@
 import React, {Component} from 'react'
 import ReactDOM from 'react-dom'
-import 'browser/browser.scss'
+import 'browser/styles/browser.scss'
 import 'common/Debug'
 
 import {createStore, applyMiddleware} from 'redux'

@@ -74,3 +74,10 @@ CREATE TABLE IF NOT EXISTS `Thumbnails` (
 	`IsArchived`	INTEGER,
 	PRIMARY KEY(`CaptureId`,`CaptureIsClip`,`Type`)
 );
+
+CREATE TABLE IF NOT EXISTS `Profiles` (
+	`XUID`	INTEGER NOT NULL,
+	`Gamertag`	TEXT NOT NULL,
+	`IsDefault`	INTEGER NOT NULL,
+	PRIMARY KEY(`XUID`)
+);

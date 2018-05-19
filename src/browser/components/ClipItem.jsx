@@ -1,6 +1,6 @@
 import React, {Component} from 'react'
 import {connect} from 'react-redux'
-import {openClip} from 'browser/redux/actions'
+import {openClip} from 'browser/redux/actions/playbackActions'
 
 class ClipItem extends Component{
     constructor(props){

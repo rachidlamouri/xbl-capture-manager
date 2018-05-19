@@ -2,7 +2,7 @@ import React, {Component} from 'react'
 import {connect} from 'react-redux'
 import classNames from 'classnames'
 
-import {closePlayback} from 'browser/redux/actions'
+import {closePlayback} from 'browser/redux/actions/playbackActions'
 
 class CapurePreview extends Component{
     constructor(props){
