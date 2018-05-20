@@ -19,7 +19,6 @@ class ClipItem extends Component{
                 <div className="info">
                     <div>{props.clipId}</div>
                     <div>{props.dateTaken}</div>
-                    <div>{props.gamertag}</div>
                     <div>{props.game}</div>
                 </div>
             </div>

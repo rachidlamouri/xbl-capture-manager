@@ -18,6 +18,7 @@ class CaptureBrowser extends Component{
         this.decrementPage = this.decrementPage.bind(this)
         this.incrementPage = this.incrementPage.bind(this)
         this.onOption = this.onOption.bind(this)
+        this.onRefresh = this.onRefresh.bind(this)
     }
     render(){
         let {props} = this
@@ -47,6 +48,7 @@ class CaptureBrowser extends Component{
                         configList={props.profileConfigList}
                         onOption={this.onOption}
                     />
+                    <i className="fas fa-sync-alt" onClick={this.onRefresh}></i>
                 </div>
                 <div className="clip-items">
                     {props.clips}
@@ -72,7 +74,12 @@ class CaptureBrowser extends Component{
         
         props.dispatch(setPage(1))
         props.dispatch(setActiveProfile(record, label))
-        props.dispatch(getMaxPages(record.XUID))
+        props.dispatch(getMaxPages())
+    }
+    onRefresh(event){
+        let {props} = this
+        props.dispatch(setPage(1))
+        props.dispatch(getMaxPages())
     }
     decrementPage(event){
         let {props} = this
