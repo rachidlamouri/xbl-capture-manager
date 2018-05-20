@@ -8,8 +8,9 @@ class CapturesController{
     static cacheClip(clipId, gamertag, dateTaken){
         let year = dateFormat(dateTaken, 'yyyy')
         let month = dateFormat(dateTaken, 'mm')
-        let archiveDir = process.env.ARCHIVE_DIR+gamertag+'/clips/'+year+'/'
-        let archiveName = gamertag+'-clips-'+year+'-'+month+'.zip'
+        let day = dateFormat(dateTaken, 'dd')
+        let archiveDir = process.env.ARCHIVE_DIR+gamertag+'/clips/'+year+'/'+month+'/'
+        let archiveName = gamertag+'-clips-'+year+'-'+month+'-'+day+'.zip'
         let tmpDir = process.env.TMP_DIR+'clips/'
         let filename = clipId+'.mp4'
         let tmpFilepath = tmpDir+filename
@@ -142,8 +143,9 @@ class CapturesController{
     static extractClipThumbnail(clipId, gamertag, dateTaken, thumbnailType){
         let year = dateFormat(dateTaken, 'yyyy')
         let month = dateFormat(dateTaken, 'mm')
-        let archiveDir = process.env.ARCHIVE_DIR+gamertag+'/thumbnails-'+thumbnailType+'/'+year+'/'
-        let archiveName = gamertag+'-thumbnails-'+thumbnailType+'-'+year+'-'+month+'.zip'
+        let day = dateFormat(dateTaken, 'dd')
+        let archiveDir = process.env.ARCHIVE_DIR+gamertag+'/thumbnails-'+thumbnailType+'/'+year+'/'+month+'/'
+        let archiveName = gamertag+'-thumbnails-'+thumbnailType+'-'+year+'-'+month+'-'+day+'.zip'
         let tmpDir = process.env.TMP_DIR+thumbnailType+'/'
         let filename = clipId+'.png'
         let tmpFilepath = tmpDir+filename

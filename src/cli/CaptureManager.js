@@ -196,11 +196,12 @@ class CaptureManager{
                 let date = new Date(DateTaken)
                 let year = dateformat(date, 'yyyy')
                 let month = dateformat(date, 'mm')
+                let day = dateformat(date, 'dd')
                 let type = IsThumbnail === 1?
                     'thumbnails-'+ThumbnailType.toLowerCase():
                     IsClip === 1? 'clips': 'screenshots'
-                let archiveName = Gamertag+'-'+type+'-'+year+'-'+month+'.zip'
-                let archiveDir = this.archiveDir+Gamertag+'/'+type+'/'+year+'/'
+                let archiveName = Gamertag+'-'+type+'-'+year+'-'+month+'-'+day+'.zip'
+                let archiveDir = this.archiveDir+Gamertag+'/'+type+'/'+year+'/'+month+'/'
                 let archiveFile = archiveDir+archiveName
                 
                 if(!fs.existsSync(archiveDir)){
