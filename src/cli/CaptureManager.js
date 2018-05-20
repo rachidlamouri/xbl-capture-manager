@@ -49,7 +49,6 @@ class CaptureManager{
         let {meta} = this.files
         if(!meta.data || !meta.data.xuid || !meta.data.gamertag){
             Util.error('Missing gamertag info. Run set-gamertag script first', true)
-            return
         }
         
         if(count === undefined){
@@ -61,7 +60,12 @@ class CaptureManager{
         }
         count = Math.abs(count)
         
-        Util.status(meta.data.gamertag)
+        if(count < 1){
+            count = 1
+        }
+        
+        Util.status('Gamertag: '+meta.data.gamertag)
+        Util.status(`Archiving ${count} captures`)
         
         let selectSql = `
             SELECT * FROM(
@@ -120,7 +124,7 @@ class CaptureManager{
                         AND $_ScreenshotsOnly = 1
                     )
                 )
-            ORDER BY DateTaken DESC, Id, IsThumbnail DESC
+            ORDER BY DateTaken ASC, Id, IsThumbnail DESC
             LIMIT 1
         `
         
@@ -573,7 +577,20 @@ class CaptureManager{
             }
         }
         
+        Util.status('Gamertag: '+meta.data.gamertag)
         documentNext()
+    }
+    setApiKey(apiKey){
+        if(!apiKey){
+            Util.error('Usage: npm run set-api-key <apiKey>', true)
+        }
+        
+        Util.status('Key: '+apiKey)
+        
+        let {meta} = this.files
+        meta.data.apiKey = apiKey
+        meta.save()
+        Util.status('Done')
     }
     setGamertag(gamertag){
         if(!gamertag){
@@ -617,11 +634,16 @@ class CaptureManager{
     }
     
     apiGet(path, message){
+        let apiKey = this.files.meta.data.apiKey
+        if(!apiKey){
+            Util.error('Missing API Key. Run set-api-key script first', true)
+        }
+        
         let options = {
             hostname: 'xboxapi.com',
             path: '/v2/'+encodeURI(path),
             headers:{
-                'X-AUTH': process.env.API_KEY,
+                'X-AUTH': apiKey,
             }
         }
         

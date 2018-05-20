@@ -29,7 +29,6 @@ class Util{
 }
 Object.assign(Util, {
     expectedEnv: [
-        'API_KEY',
         'SAVE_DIR',
     ],
 })

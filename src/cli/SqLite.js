@@ -3,10 +3,10 @@ const sqlite3 = require('sqlite3')
 const Util = require('./Util')
 
 class QueryResult{
-    constructor(rows){
+    constructor(records){
         Object.assign(this, {
-            first: rows.length > 0? rows[0]: null,
-            rows: rows,
+            first: records.length > 0? records[0]: null,
+            records: records,
         })
     }
 }

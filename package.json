@@ -14,12 +14,13 @@
   "license": "ISC",
   "main": "index.js",
   "scripts": {
-    "archive": "node src/archive.js",
-    "cache": "node src/cache.js",
-    "document": "node src/document.js",
+    "archive": "node src/cli/scripts/archive.js",
+    "cache": "node src/cli/scripts/cache.js",
+    "document": "node src/cli/scripts/document.js",
     "pack": "webpack --watch",
     "rebuild": "electron-rebuild -f -w sqlite3",
-    "set-gamertag": "node src/set_gamertag.js"
+    "set-api-key": "node src/cli/scripts/set_api_key.js",
+    "set-gamertag": "node src/cli/scripts/set_gamertag.js"
   },
   "dependencies": {
     "classnames": "^2.2.5",

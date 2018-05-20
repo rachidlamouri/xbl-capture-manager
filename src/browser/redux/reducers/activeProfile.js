@@ -6,8 +6,8 @@ export default function(state = profileState(), action){
     switch(action.type){
         case SET_ACTIVE_PROFILE:
             return Object.assign({}, state, {
-                xuid: action.record.XUID,
-                gamertag: action.record.Gamertag,
+                xuid: action.record? action.record.XUID: '',
+                gamertag: action.record? action.record.Gamertag: '',
             })
         default:
             return state

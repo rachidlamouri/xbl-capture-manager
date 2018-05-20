@@ -1,4 +1,4 @@
-const CaptureManager = require('./CaptureManager')
+const CaptureManager = require('../CaptureManager')
 let manager = new CaptureManager()
 
 process.argv.splice(0,2)
