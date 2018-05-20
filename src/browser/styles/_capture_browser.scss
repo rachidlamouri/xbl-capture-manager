@@ -33,7 +33,7 @@ $header-height: 40px;
     flex-direction: column;
     grid-row-start: 2;
     grid-row-end: 3;
-    overflow-y: scroll;
+    overflow-y: auto;
     padding: $padding-md;
 }
 
@@ -63,4 +63,19 @@ $header-height: 40px;
 
 .clip-item .info{
     flex-direction: column;
+}
+
+.clip-items .page-controls .space{
+    flex-grow: 1;
+}
+
+.clip-items .page-controls i:hover{
+    color: #778899;
+    cursor: pointer;
+}
+
+.clip-items .page-controls .page-down.disabled,
+.clip-items .page-controls .page-up.disabled{
+    color: #DDD;
+    cursor: not-allowed;
 }

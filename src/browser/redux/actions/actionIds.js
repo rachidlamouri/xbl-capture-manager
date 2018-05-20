@@ -5,6 +5,8 @@ const actionIds = [
     
     'CACHE_CLIP',
     'CLOSE_PLAYBACK',
+    'SET_MAX_PAGES',
+    'SET_PAGE',
     
     'SET_ACTIVE_PROFILE',
     

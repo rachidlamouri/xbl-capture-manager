@@ -15,6 +15,8 @@ export function profilesState(){
 export function clipsState(){
     return {
         isFetching: false,
+        page: 1,
+        maxPages: null,
         records: [],
     }
 }

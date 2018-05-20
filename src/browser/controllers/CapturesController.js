@@ -36,7 +36,7 @@ class CapturesController{
             })
         })
     }
-    static getClips(xuid){
+    static getClips(xuid, page = 1){
         if(xuid == null){
             return Promise.resolve([])
         }
@@ -51,11 +51,14 @@ class CapturesController{
             WHERE IsArchived = 1
                 AND XUID = $XUID
             ORDER BY DateTaken DESC
-            LIMIT 10
+            LIMIT $_ClipsPerPage
+            OFFSET $_ClipsPerPage*($_Page - 1)
         `
         
         let params = {
             $XUID: xuid,
+            $_ClipsPerPage: CapturesController.CLIPS_PER_PAGE,
+            $_Page: page,
         }
         
         return(
@@ -96,6 +99,27 @@ class CapturesController{
             .then((result)=>{
                 let record = result.first? result.first: []
                 return Promise.resolve(result.first)
+            })
+        )
+    }
+    static getMaxPages(xuid){
+        let sql = `
+            SELECT COUNT(*)*1.0/$_ClipsPerPage AS MaxPages
+            FROM Clips
+            WHERE XUID = $XUID
+                AND IsArchived = 1
+        `
+        
+        let params = {
+            $XUID: xuid,
+            $_ClipsPerPage: CapturesController.CLIPS_PER_PAGE,
+        }
+        
+        return(
+            sqlite.query(sql, params)
+            .then((result)=>{
+                let maxPages = Math.ceil(result.first.MaxPages)
+                return maxPages
             })
         )
     }
@@ -142,5 +166,8 @@ class CapturesController{
         })
     }
 }
+Object.assign(CapturesController, {
+    CLIPS_PER_PAGE: 8,
+})
 
 export default CapturesController

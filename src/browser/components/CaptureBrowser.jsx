@@ -1,7 +1,8 @@
 import fs from 'fs'
+import classNames from 'classNames'
 import React, {Component} from 'react'
 import {connect} from 'react-redux'
-import {getClips} from 'browser/redux/actions/clipsActions'
+import {getClips, getMaxPages, setPage, decrementPage, incrementPage} from 'browser/redux/actions/clipsActions'
 import {setDefaultProfile, setActiveProfile} from 'browser/redux/actions/activeProfileActions'
 import {getProfiles} from 'browser/redux/actions/profilesActions'
 
@@ -14,10 +15,29 @@ class CaptureBrowser extends Component{
     constructor(props){
         super(props)
         
+        this.decrementPage = this.decrementPage.bind(this)
+        this.incrementPage = this.incrementPage.bind(this)
         this.onOption = this.onOption.bind(this)
     }
     render(){
         let {props} = this
+        
+        let pageControlsClasses = classNames('page-controls', {
+            hidden: props.clipsCount == 0,
+        })
+        
+        let pageDownClasses = classNames('fas fa-arrow-left page-down', {
+            disabled: props.currentPage == 1,
+        })
+        
+        let pageUpClasses = classNames('fas fa-arrow-right page-up', {
+            disabled: props.currentPage == props.maxPages,
+        })
+        
+        let noCapturesMessageClasses = classNames({
+            hidden: props.clipsCount > 0,
+        })
+        
         return(
             <div className="capture-browser">
                 <CapturePreview/>
@@ -30,6 +50,12 @@ class CaptureBrowser extends Component{
                 </div>
                 <div className="clip-items">
                     {props.clips}
+                    <div className={pageControlsClasses}>
+                        <i className={pageDownClasses} onClick={this.decrementPage}/>
+                        <div className="space"/>
+                        <i className={pageUpClasses} onClick={this.incrementPage}/>
+                    </div>
+                    <div className={noCapturesMessageClasses}>No captures archived.</div>
                 </div>
             </div>
         )
@@ -43,8 +69,18 @@ class CaptureBrowser extends Component{
     }
     onOption(record, label){
         let {props} = this
+        
+        props.dispatch(setPage(1))
         props.dispatch(setActiveProfile(record, label))
-        props.dispatch(getClips(record.XUID))
+        props.dispatch(getMaxPages(record.XUID))
+    }
+    decrementPage(event){
+        let {props} = this
+        props.dispatch(decrementPage())
+    }
+    incrementPage(event){
+        let {props} = this
+        props.dispatch(incrementPage())
     }
     
     static getClipItems(records){
@@ -72,7 +108,10 @@ class CaptureBrowser extends Component{
         return {
             activeGamertag: state.activeProfile.gamertag,
             clips: CaptureBrowser.getClipItems(state.clips.records),
-            profileConfigList: CaptureBrowser.getProfileConfigList(state.profiles.records)
+            currentPage: state.clips.page,
+            maxPages: state.clips.maxPages,
+            profileConfigList: CaptureBrowser.getProfileConfigList(state.profiles.records),
+            clipsCount: state.clips.records.length,
         }
     }
 }
