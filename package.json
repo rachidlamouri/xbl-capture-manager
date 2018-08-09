@@ -16,6 +16,7 @@
   "scripts": {
     "archive": "node src/cli/scripts/archive.js",
     "cache": "node src/cli/scripts/cache.js",
+    "clean-tmp": "rm -r data/tmp/clips data/tmp/small",
     "document": "node src/cli/scripts/document.js",
     "pack": "webpack --watch",
     "rebuild": "electron-rebuild -f -w sqlite3",
